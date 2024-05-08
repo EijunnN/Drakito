@@ -1,3 +1,4 @@
+// veredicto.js
 const { ChatCommand } = require("../../utils/commands");
 const {
   Bet,
@@ -6,7 +7,7 @@ const {
   UserBetHistory,
 } = require("../../../lib/models/schema");
 const { ApplicationCommandOptionType } = require("discord.js");
-const { rolePermission } = require("../../utils/allowedChannels");
+
 
 module.exports = ChatCommand({
   name: "veredicto",
@@ -28,12 +29,17 @@ module.exports = ChatCommand({
   ],
   async execute(client, interaction) {
 
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const guildId = interaction.guild.id;
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+    
+    if (!adminRoles || !adminRoles.value.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
+
+    
 
     try {
       const betId = interaction.options.getString("id");
@@ -84,18 +90,42 @@ module.exports = ChatCommand({
       }
 
       // Actualizar el estado de las apuestas de los usuarios
+      // await UserBet.updateMany(
+      //   { betId: bet._id, option: { $in: opcionesGanadoras } },
+      //   { $set: { status: "won", winner: true } }
+      // );
+
+      // await UserBet.updateMany(
+      //   { betId: bet._id, option: { $nin: opcionesGanadoras } },
+      //   { $set: { status: "lost" } }
+      // );
+
+
+
       await UserBet.updateMany(
-        { betId: bet._id, option: { $in: opcionesGanadoras } },
+        {
+          guildId: interaction.guild.id,
+          betId: bet._id,
+          option: { $in: opcionesGanadoras },
+        },
         { $set: { status: "won", winner: true } }
       );
-
+      
       await UserBet.updateMany(
-        { betId: bet._id, option: { $nin: opcionesGanadoras } },
+        {
+          guildId: interaction.guild.id,
+          betId: bet._id,
+          option: { $nin: opcionesGanadoras },
+        },
         { $set: { status: "lost" } }
       );
-
       // Actualizar el saldo de los usuarios ganadores
+      // const userBetsGanadas = await UserBet.find({
+      //   betId: bet._id,
+      //   status: "won",
+      // });
       const userBetsGanadas = await UserBet.find({
+        guildId: interaction.guild.id,
         betId: bet._id,
         status: "won",
       });
@@ -113,19 +143,25 @@ module.exports = ChatCommand({
       // Actualizar el historial de apuestas
       for (const userBet of userBetsGanadas) {
         await UserBetHistory.updateOne(
-          { userId: userBet.userId, betId: bet._id },
+          { guildId: interaction.guild.id, userId: userBet.userId, betId: bet._id },
           { $set: { outcome: "ganada" } }
         );
       }
 
+      // const userBetsPerdidas = await UserBet.find({
+      //   betId: bet._id,
+      //   status: "lost",
+      // });
+
       const userBetsPerdidas = await UserBet.find({
+        guildId: interaction.guild.id,
         betId: bet._id,
         status: "lost",
       });
 
       for (const userBet of userBetsPerdidas) {
         await UserBetHistory.updateOne(
-          { userId: userBet.userId, betId: bet._id },
+          { guildId: interaction.guild.id, userId: userBet.userId, betId: bet._id },
           { $set: { outcome: "perdida" } }
         );
       }

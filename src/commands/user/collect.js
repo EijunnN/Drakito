@@ -1,8 +1,7 @@
-// ./src/commands/user/collect.js
 const { ChatCommand } = require("../../utils/commands");
-const { User, Role } = require("../../../lib/models/schema");
+const { User, Role, Config } = require("../../../lib/models/schema");
 const { EmbedBuilder } = require("discord.js"); // Importar MessageEmbed
-const { economyChannelIds } = require("../../utils/allowedChannels");
+
 module.exports = ChatCommand({
   name: "collect",
   description: "Recolecta tus ingresos basados en tus roles",
@@ -11,16 +10,26 @@ module.exports = ChatCommand({
     const discordId = interaction.user.id;
     const now = new Date();
 
-    // Buscar el perfil del usuario
-    const user = await User.findOne({ discordId: discordId });
+    const user = await User.findOne({
+      discordId: discordId,
+      guildId: interaction.guild.id,
+    });
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+
     if (!user) {
       return interaction.reply({
         embeds: [
@@ -43,11 +52,14 @@ module.exports = ChatCommand({
     let recolectadoAlgo = false;
 
     for (const discordRoleId of discordRoles) {
-      const roleConfig = await Role.findOne({ discordRoleId: discordRoleId });
+      const roleConfig = await Role.findOne({
+        discordRoleId: discordRoleId,
+        guildId: interaction.guild.id,
+      });
 
       if (roleConfig) {
         const lastCollectTime = user.lastCollect || new Date(0);
-        const collectInterval = roleConfig.collectInterval * 60000; // Convertir minutos a milisegundos
+        const collectInterval = roleConfig.collectInterval * 60000;
 
         if (now - lastCollectTime >= collectInterval) {
           user.balance.bank += roleConfig.collectAmount;
@@ -84,7 +96,7 @@ module.exports = ChatCommand({
       return interaction.reply({
         embeds: [
           new EmbedBuilder()
-            .setColor("#FFFF00") // Amarillo para notificación
+            .setColor("#FFFF00")
             .setTitle("Recolección de Ingresos")
             .setDescription(content),
         ],
@@ -96,7 +108,7 @@ module.exports = ChatCommand({
     return interaction.reply({
       embeds: [
         new EmbedBuilder()
-          .setColor("#00FF00") // Verde para éxito
+          .setColor("#00FF00")
           .setAuthor({
             name: interaction.user.tag,
             iconURL: interaction.user.displayAvatarURL(),

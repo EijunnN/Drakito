@@ -1,8 +1,6 @@
-// transferir.js
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User, Transaction } = require("../../../lib/models/schema");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+const { User, Transaction, Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "transferir",
@@ -27,12 +25,19 @@ module.exports = ChatCommand({
     const senderDiscordId = interaction.user.id;
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+
     if (amount <= 0) {
       return interaction.reply({
         content: "La cantidad debe ser mayor que cero.",
@@ -40,8 +45,14 @@ module.exports = ChatCommand({
       });
     }
 
-    const sender = await User.findOne({ discordId: senderDiscordId });
-    const recipient = await User.findOne({ bankCode: bankCode });
+    const sender = await User.findOne({
+      discordId: senderDiscordId,
+      guildId: interaction.guild.id,
+    });
+    const recipient = await User.findOne({
+      bankCode: bankCode,
+      guildId: interaction.guild.id,
+    });
 
     if (!sender || sender.balance.cash < amount) {
       return interaction.reply({

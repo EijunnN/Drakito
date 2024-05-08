@@ -1,8 +1,8 @@
-// ./src/commands/user/autoremove.js
+
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { rolePermission } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
+
 module.exports = ChatCommand({
   name: "auto-remove",
   description:
@@ -33,9 +33,12 @@ module.exports = ChatCommand({
     const tiempoEnMinutos = interaction.options.getInteger("tiempoenminutos");
     const channelId = interaction.channelId;
 
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const guildId = interaction.guild.id;
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+    
+    if (!adminRoles || !adminRoles.value.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
@@ -47,6 +50,7 @@ module.exports = ChatCommand({
         .map((member) => member.id);
 
       await User.updateMany(
+        
         { discordId: { $in: roleMemberIds } },
         { $inc: { "balance.bank": -cantidad, "balance.total": -cantidad } }
       );
@@ -57,7 +61,7 @@ module.exports = ChatCommand({
           `Se removió automáticamente $${cantidad} del banco de los usuarios con el rol ${role.name}.`
         );
       }
-      // Aquí podrías enviar un mensaje al canal o realizar alguna otra acción después de completar la tarea
+      
     }, tiempoEnMinutos * 60000); // Convertir minutos a milisegundos
 
     return interaction.reply({

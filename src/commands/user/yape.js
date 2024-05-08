@@ -1,31 +1,40 @@
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
+
 module.exports = ChatCommand({
-  name: "codigo",
+  name: "yape",
   description: "Establece o cambia tu código de banco",
   options: [
     {
       type: ApplicationCommandOptionType.String,
-      name: "codigo",
+      name: "yape",
       description: "Tu nuevo código de banco",
       required: true,
     },
   ],
   async execute(client, interaction) {
-    const newCode = interaction.options.getString("codigo");
+    const newCode = interaction.options.getString("yape");
     const discordId = interaction.user.id;
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
-    // Comprobar si el código ya está en uso por otro usuario
-    const existingCode = await User.findOne({ bankCode: newCode });
+
+    const existingCode = await User.findOne({
+      guildId: interaction.guild.id,
+      bankCode: newCode,
+    });
     if (existingCode && existingCode.discordId !== discordId) {
       return interaction.reply({
         content:
@@ -34,9 +43,8 @@ module.exports = ChatCommand({
       });
     }
 
-    // Buscar el perfil del usuario y actualizar su código de banco
     const userProfile = await User.findOneAndUpdate(
-      { discordId: discordId },
+      { discordId: discordId, guildId: interaction.guild.id },
       { bankCode: newCode },
       { new: true }
     );

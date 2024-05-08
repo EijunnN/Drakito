@@ -2,7 +2,7 @@
 const { ChatCommand } = require("../../utils/commands");
 const { Bet } = require("../../../lib/models/schema");
 const { ApplicationCommandOptionType } = require("discord.js");
-const { rolePermission } = require("../../utils/allowedChannels");
+const { Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "fork",
@@ -27,18 +27,25 @@ module.exports = ChatCommand({
   ],
   async execute(client, interaction) {
     // await interaction.deferReply();
+    const guildId = interaction.guild.id;
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
 
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    if (
+      !adminRoles ||
+      !adminRoles.value.some((roleId) =>
+        interaction.member.roles.cache.has(roleId)
+      )
+    ) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
+
     try {
       const id = interaction.options.getString("id");
       const estado = interaction.options.getString("estado");
 
-      // Verificar si el estado proporcionado es válido
       if (estado !== "open" && estado !== "closed") {
         return interaction.reply({
           content: "El estado proporcionado no es válido.",
@@ -46,8 +53,10 @@ module.exports = ChatCommand({
         });
       }
 
-      // Buscar la apuesta por su ID
-      const bet = await Bet.findOne({ betId: id });
+      const bet = await Bet.findOne({
+        guildId: interaction.guild.id,
+        betId: id,
+      });
       if (!bet) {
         return interaction.reply({
           content: "No se encontró una apuesta con el ID proporcionado.",
@@ -55,7 +64,6 @@ module.exports = ChatCommand({
         });
       }
 
-      // Cambiar el estado de la apuesta
       bet.status = estado;
       await bet.save();
 

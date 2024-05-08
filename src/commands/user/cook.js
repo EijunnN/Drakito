@@ -1,7 +1,7 @@
+// cook.js
 const { ApplicationCommandOptionType, EmbedBuilder } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
 
 const dishes = [
   {
@@ -427,41 +427,25 @@ module.exports = ChatCommand({
   description: "Participa en un concurso de cocina y gana o pierde dinero",
   async execute(client, interaction) {
     const discordId = interaction.user.id;
-    
+
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
 
-    // Verificar si el usuario está en cooldown
-    // if (cooldowns.has(discordId)) {
-    //   const lastPlayTime = cooldowns.get(discordId);
-    //   const timeElapsed = Date.now() - lastPlayTime;
-
-    //   if (timeElapsed < cooldownTime) {
-    //     const timeLeft = (cooldownTime - timeElapsed) / 1000; // Convertir a segundos
-    //     const minutes = Math.floor(timeLeft / 60);
-    //     const seconds = Math.floor(timeLeft % 60);
-
-    //     const embed = new EmbedBuilder()
-    //       .setColor("Red")
-    //       .setTitle("⏰ Cooldown")
-    //       .setDescription(
-    //         `${interaction.user}, debes esperar ${minutes} minuto(s) y ${seconds} segundo(s) antes de poder jugar nuevamente.`
-    //       );
-
-    //     return interaction.reply({ embeds: [embed], ephemeral: false });
-    //   }
-    // }
-
-    // Seleccionar un plato aleatorio
     const dish = dishes[Math.floor(Math.random() * dishes.length)];
     const shuffledIngredients = shuffle([...dish.availableIngredients]);
 
-    // Mostrar información del plato y solicitar ingredientes al usuario
     let description = `🍳 ¡Bienvenido al concurso de cocina! Tu desafío es preparar: **${dish.name}**\n\n`;
     description += "Ingredientes disponibles:\n";
     shuffledIngredients.forEach((ingredient, index) => {
@@ -536,9 +520,13 @@ module.exports = ChatCommand({
         const winnings = correctIngredients * 1000; // Ganancias basadas en la cantidad de ingredientes correctos
 
         // Actualizar el saldo del usuario
-        let userProfile = await User.findOne({ discordId });
+        let userProfile = await User.findOne({
+          discordId,
+          guildId: interaction.guild.id,
+        });
         if (!userProfile) {
           userProfile = new User({
+            guildId: interaction.guild.id,
             discordId,
             username: interaction.user.username,
             balance: {
@@ -560,10 +548,13 @@ module.exports = ChatCommand({
       } else {
         const loss = incorrectIngredients * 2000; // Pérdida basada en la cantidad de ingredientes incorrectos
 
-        // Actualizar el saldo del usuario
-        let userProfile = await User.findOne({ discordId });
+        let userProfile = await User.findOne({
+          discordId,
+          guildId: interaction.guild.id,
+        });
         if (!userProfile) {
           userProfile = new User({
+            guildId: interaction.guild.id,
             discordId,
             username: interaction.user.username,
             balance: {

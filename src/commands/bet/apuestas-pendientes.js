@@ -1,27 +1,36 @@
 // apuestasPendientes.js
 const { ChatCommand } = require("../../utils/commands");
-const { Bet, UserBet } = require("../../../lib/models/schema");
-const { rolePermission } = require("../../utils/allowedChannels");
+const { Bet, UserBet, Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "apuestas-pendientes",
   description: "Muestra las apuestas pendientes de veredicto",
   async execute(client, interaction) {
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const guildId = interaction.guild.id;
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+
+    if (
+      !adminRoles ||
+      !adminRoles.value.some((roleId) =>
+        interaction.member.roles.cache.has(roleId)
+      )
+    ) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
     await interaction.deferReply();
     try {
-      // Obtener los IDs de las apuestas con apuestas de usuarios pendientes
       const pendingBetIds = await UserBet.distinct("betId", {
+        guildId: interaction.guild.id,
         status: "pending",
       });
 
-      // Obtener las apuestas correspondientes a los IDs pendientes
-      const bets = await Bet.find({ _id: { $in: pendingBetIds } });
+      const bets = await Bet.find({
+        _id: { $in: pendingBetIds },
+        status: "closed",
+      });
 
       if (bets.length === 0) {
         return interaction.editReply({
@@ -30,7 +39,6 @@ module.exports = ChatCommand({
         });
       }
 
-      // Separar las apuestas en partes para respetar el límite de caracteres
       const parts = [];
       let currentPart = "";
       for (const bet of bets) {
@@ -49,18 +57,15 @@ module.exports = ChatCommand({
           "\n----------------\n";
 
         if (currentPart.length + betText.length > 2000) {
-          // Si la parte actual excede el límite, guardarla y comenzar una nueva parte
           parts.push(currentPart);
           currentPart = betText;
         } else {
-          // Si la parte actual no excede el límite, agregar el texto a la parte actual
           currentPart += betText;
         }
       }
-      // Agregar la última parte
+
       parts.push(currentPart);
 
-      // Enviar cada parte como un mensaje separado
       for (const part of parts) {
         await interaction.followUp({
           content: part,

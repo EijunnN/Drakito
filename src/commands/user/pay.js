@@ -1,8 +1,7 @@
-// pay.js
+
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "pay",
@@ -26,6 +25,22 @@ module.exports = ChatCommand({
     const amount = interaction.options.getInteger("cantidad");
     const payerDiscordId = interaction.user.id;
     const recipientDiscordId = targetUser.id;
+    const guildId = interaction.guild.id;
+
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (
+      !allowedChannels ||
+      !allowedChannels.value.includes(interaction.channel.id)
+    ) {
+      return interaction.reply({
+        content: `Este comando solo puede ser utilizado en el canal <#${allowedChannels.value}>.`,
+        ephemeral: true,
+      });
+    }
 
     if (amount <= 0) {
       return interaction.reply({
@@ -34,7 +49,10 @@ module.exports = ChatCommand({
       });
     }
 
-    const payer = await User.findOne({ discordId: payerDiscordId });
+    const payer = await User.findOne({
+      discordId: payerDiscordId,
+      guildId: interaction.guild.id,
+    });
     if (!payer || payer.balance.cash < amount) {
       return interaction.reply({
         content:
@@ -43,7 +61,10 @@ module.exports = ChatCommand({
       });
     }
 
-    const recipient = await User.findOne({ discordId: recipientDiscordId });
+    const recipient = await User.findOne({
+      discordId: recipientDiscordId,
+      guildId: interaction.guild.id,
+    });
     if (!recipient) {
       return interaction.reply({
         content: "El usuario destinatario no existe.",
@@ -52,12 +73,7 @@ module.exports = ChatCommand({
     }
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
-      return interaction.reply({
-        content: "Este comando solo puede ser utilizado en canales permitidos.",
-        ephemeral: true,
-      });
-    }
+
     payer.balance.cash -= amount;
     recipient.balance.cash += amount;
 

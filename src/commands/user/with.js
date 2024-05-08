@@ -1,8 +1,6 @@
-// ./src/commands/user/with.js
 const { ApplicationCommandOptionType, EmbedBuilder } = require("discord.js");
-const { User } = require("../../../lib/models/schema"); // Asegúrate de que la ruta sea correcta
+const { User, Config } = require("../../../lib/models/schema"); // Asegúrate de que la ruta sea correcta
 const { ChatCommand } = require("../../utils/commands");
-const { economyChannelIds } = require("../../utils/allowedChannels");
 
 module.exports = ChatCommand({
   name: "with",
@@ -12,13 +10,13 @@ module.exports = ChatCommand({
       type: ApplicationCommandOptionType.Integer,
       name: "cantidad",
       description: "Cantidad de dinero a retirar del banco",
-      required: false, // no es requerido para permitir retirar todo
+      required: false,
     },
     {
       type: ApplicationCommandOptionType.Boolean,
       name: "all",
       description: "Retira todo el dinero del banco",
-      required: false, // no es requerido para permitir retirar una cantidad específica
+      required: false,
     },
   ],
   async execute(client, interaction) {
@@ -26,15 +24,25 @@ module.exports = ChatCommand({
     const amountToWithdraw = interaction.options.getInteger("cantidad");
     const withdrawAll = interaction.options.getBoolean("all") || false;
 
-    const userProfile = await User.findOne({ username: targetUser.username });
+    const userProfile = await User.findOne({
+      username: targetUser.username,
+      guildId: interaction.guild.id,
+    });
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+
     if (!userProfile) {
       return interaction.reply({
         content: "No se encontró tu perfil de usuario.",
@@ -63,11 +71,10 @@ module.exports = ChatCommand({
       withdrawalAmount = amountToWithdraw;
     }
 
-    // Actualizar balances del usuario
     userProfile.balance.cash += withdrawalAmount;
     userProfile.balance.bank -= withdrawalAmount;
     userProfile.balance.total =
-      userProfile.balance.cash + userProfile.balance.bank; // Asegúrate de actualizar el balance total
+      userProfile.balance.cash + userProfile.balance.bank;
     await userProfile.save();
 
     const balanceEmbed = new EmbedBuilder()

@@ -1,23 +1,33 @@
+// topbet.js
 const { ChatCommand } = require("../../utils/commands");
-const { Bet, UserBetHistory } = require("../../../lib/models/schema");
-const { EmbedBuilder, Guild } = require("discord.js");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+const { Bet, UserBetHistory, Config } = require("../../../lib/models/schema");
+const { EmbedBuilder } = require("discord.js");
+
 
 module.exports = ChatCommand({
   name: "topbets",
   description: "Muestra las 10 apuestas más populares sobre los encuentros.",
   async execute(client, interaction) {
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
-        content: "Este comando solo puede ser utilizado en canales permitidos.",
+        content:
+          "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+
     try {
       // Obtener las 10 apuestas más populares sobre los encuentros
       const topBets = await UserBetHistory.aggregate([
-        { $match: { outcome: "pending" } },
+        { $match: { guildId: interaction.guild.id, outcome: "pending" } },
         // Agrupar las apuestas por encuentro
         { $group: { _id: "$encuentro", count: { $sum: 1 } } },
         // Ordenar los encuentros por cantidad de apuestas en orden descendente

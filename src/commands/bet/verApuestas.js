@@ -162,11 +162,11 @@
 // });
 
 
-
+// verApuestas.js
 const { ChatCommand } = require("../../utils/commands");
-const { Bet } = require("../../../lib/models/schema");
+const { Bet, Config } = require("../../../lib/models/schema");
 const { ApplicationCommandOptionType } = require("discord.js");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+
 
 module.exports = ChatCommand({
   name: "ver-apuestas",
@@ -185,20 +185,29 @@ module.exports = ChatCommand({
     },
   ],
   async execute(client, interaction) {
-    await interaction.deferReply();
+    
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+    await interaction.deferReply();
     try {
       const currentDate = new Date();
       const searchDate = new Date(currentDate);
       searchDate.setDate(searchDate.getDate() + 1);
 
       let query = {
+        guildId: interaction.guild.id,
         date: {
           $gte: new Date(searchDate.toISOString().slice(0, 10)),
           $lt: new Date(searchDate.toISOString().slice(0, 10) + "T23:59:59.999Z"),

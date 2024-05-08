@@ -1,12 +1,12 @@
+
 const {
   EmbedBuilder,
   ActionRowBuilder,
   ButtonBuilder,
   ButtonStyle,
 } = require("discord.js");
-const { User } = require("../../../lib/models/schema");
+const { User, Config } = require("../../../lib/models/schema");
 const { ChatCommand } = require("../../utils/commands");
-const { economyChannelIds } = require("../../utils/allowedChannels");
 
 module.exports = ChatCommand({
   name: "leaderboard",
@@ -18,17 +18,24 @@ module.exports = ChatCommand({
     const totalUsers = await User.countDocuments();
     const totalPages = Math.ceil(totalUsers / usersPerPage);
 
-    const users = await User.find({})
+    const users = await User.find({ guildId: interaction.guild.id })
       .sort({ "balance.total": -1 })
       .limit(usersPerPage);
 
-      const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const channelId = interaction.channel.id;
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
+
     const leaderboardEmbed = new EmbedBuilder()
       .setTitle(`${interaction.guild.name} - Leaderboard`)
       .setColor("Random")

@@ -1,8 +1,6 @@
-// ./src/commands/user/removemoney.js
 const { ApplicationCommandOptionType, EmbedBuilder } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { rolePermission } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "remove-money",
@@ -51,14 +49,22 @@ module.exports = ChatCommand({
     const tipo = interaction.options.getString("tipo");
     const cantidad = interaction.options.getInteger("cantidad");
     const razon = interaction.options.getString("razon") || "No especificada";
+    const guildId = interaction.guild.id;
 
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+
+    if (
+      !adminRoles ||
+      !adminRoles.value.some((roleId) =>
+        interaction.member.roles.cache.has(roleId)
+      )
+    ) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
-    
+
     if (targetUser && role) {
       return interaction.reply({
         content: "Especifica un usuario o un rol, no ambos.",
@@ -81,11 +87,14 @@ module.exports = ChatCommand({
     }
 
     if (targetUser) {
-      const user = await User.findOne({ discordId: targetUser.id });
+      const user = await User.findOne({
+        discordId: targetUser.id,
+        guildId: interaction.guild.id,
+      });
 
       if (!user) {
-        // Si el usuario no existe, se crea un nuevo registro con balance negativo
         const newUser = new User({
+          guildId: interaction.guild.id,
           discordId: targetUser.id,
           username: targetUser.username,
           balance: {
@@ -96,7 +105,6 @@ module.exports = ChatCommand({
         });
         await newUser.save();
       } else {
-        // Si el usuario ya existe, actualizamos su balance incluso si resulta negativo
         user.balance[tipo] -= cantidad;
         user.balance.total = user.balance.cash + user.balance.bank;
         await user.save();
@@ -111,7 +119,6 @@ module.exports = ChatCommand({
         .filter((member) => member.roles.cache.has(role.id))
         .map((member) => member.id);
 
-      // Aquí se actualiza el balance de todos los usuarios con el rol, permitiendo balances negativos
       await User.updateMany(
         { discordId: { $in: roleMemberIds } },
         { $inc: { [`balance.${tipo}`]: -cantidad, "balance.total": -cantidad } }

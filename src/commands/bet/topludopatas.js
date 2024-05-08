@@ -1,16 +1,22 @@
+// topludopatas.js
 const { ChatCommand } = require("../../utils/commands");
-const { UserBetHistory, User } = require("../../../lib/models/schema");
+const { UserBetHistory, User, Config } = require("../../../lib/models/schema");
 const { EmbedBuilder } = require("discord.js");
-const { economyChannelIds } = require("../../utils/allowedChannels");
+
 
 module.exports = ChatCommand({
   name: "topludopatas",
   description:
     "Muestra los 10 mejores ludópatas basados en la cantidad total de apuestas realizadas.",
   async execute(client, interaction) {
-
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
@@ -18,7 +24,7 @@ module.exports = ChatCommand({
     }
     try {
       // Obtener los 10 mejores ludópatas basados en la cantidad total de apuestas realizadas
-      const topLudopatas = await getTopLudopatas();
+      const topLudopatas = await getTopLudopatas(interaction.guild.id);
       // Si no hay resultados, enviar un mensaje indicando que no hay ludópatas
       if (topLudopatas.length === 0) {
         return interaction.reply({
@@ -60,6 +66,7 @@ async function getTopLudopatas() {
   try {
     // Agregar una nueva etapa de agregación para agrupar y sumar la cantidad de apuestas por usuario
     const topLudopatas = await UserBetHistory.aggregate([
+      { $match: { guildId } },
       {
         $group: {
           _id: "$userId",

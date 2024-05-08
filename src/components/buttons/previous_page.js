@@ -29,7 +29,7 @@ module.exports = Button({
     const usersPerPage = 10;
 
     // Obtener los usuarios para la página anterior
-    const users = await User.find({})
+    const users = await User.find({ guildId: interaction.guild.id })
       .sort({ "balance.total": -1 })
       .skip((previousPage - 1) * usersPerPage)
       .limit(usersPerPage);

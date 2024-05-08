@@ -1,8 +1,8 @@
-// ./src/commands/user/balance.js
+
 const { ApplicationCommandOptionType, EmbedBuilder } = require("discord.js");
-const { User } = require("../../../lib/models/schema"); // Ajusta la ruta según tu estructura de proyecto
+const { User, Config } = require("../../../lib/models/schema"); // Ajusta la ruta según tu estructura de proyecto
 const { ChatCommand } = require("../../utils/commands");
-const { economyChannelIds} = require("../../utils/allowedChannels");
+
 module.exports = ChatCommand({
   name: "balance",
   description: "Muestra tu balance de efectivo y banco",
@@ -15,22 +15,31 @@ module.exports = ChatCommand({
     },
   ],
   async execute(client, interaction) {
-    // Obtener el usuario de Discord objetivo
+    
     const targetUser =
       interaction.options.getUser("usuario") ?? interaction.user;
 
       const channelId = interaction.channel.id;
-      if (!economyChannelIds.includes(channelId)) {
+      const guildId = interaction.guild.id;
+
+      const allowedChannels = await Config.findOne({
+        guildId,
+        key: "allowedChannels",
+      });
+
+      if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
         return interaction.reply({
           content: "Este comando solo puede ser utilizado en canales permitidos.",
           ephemeral: true,
         });
       }
 
-    // Buscar el perfil del usuario en la base de datos o crear uno nuevo si no existe
-    let userProfile = await User.findOne({ username: targetUser.username });
+    
+    let userProfile = await User.findOne({ discordId: targetUser.id, guildId: interaction.guild.id });
+
     if (!userProfile) {
       userProfile = new User({
+        guildId: interaction.guild.id,
         discordId: targetUser.id,
         username: targetUser.username,
         balance: {
@@ -42,7 +51,7 @@ module.exports = ChatCommand({
       await userProfile.save();
     }
 
-    // Crear el embed con la información del balance
+    
     const balanceEmbed = new EmbedBuilder()
       .setAuthor({
         name: targetUser.tag,
@@ -71,7 +80,7 @@ module.exports = ChatCommand({
       )
       .setTimestamp();
 
-    // Enviar el embed como respuesta
+    
     await interaction.reply({ embeds: [balanceEmbed] });
   },
 });

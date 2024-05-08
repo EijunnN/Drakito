@@ -1,11 +1,7 @@
-// ./src/commands/user/work.js
 const { ApplicationCommandOptionType, EmbedBuilder } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { User } = require("../../../lib/models/schema");
-const { allowedChannels, economyChannelIds } = require("../../utils/allowedChannels");
+const { User, Config } = require("../../../lib/models/schema");
 
-
-// Definir los diferentes trabajos y sus tareas asociadas
 const jobs = {
   rappi: {
     title: "🛵 Repartidor de Rappi",
@@ -339,19 +335,27 @@ module.exports = ChatCommand({
     // const channelId = interaction.channelId;
 
     const channelId = interaction.channel.id;
-    if (!economyChannelIds.includes(channelId)) {
+    const guildId = interaction.guild.id;
+    const allowedChannels = await Config.findOne({
+      guildId,
+      key: "allowedChannels",
+    });
+
+    if (!allowedChannels || !allowedChannels.value.includes(channelId)) {
       return interaction.reply({
         content: "Este comando solo puede ser utilizado en canales permitidos.",
         ephemeral: true,
       });
     }
 
-    
-    // Buscar el perfil del usuario
-    let userProfile = await User.findOne({ discordId: discordId });
+    let userProfile = await User.findOne({
+      discordId: discordId,
+      guildId: interaction.guild.id,
+    });
     if (!userProfile) {
       userProfile = new User({
         discordId: discordId,
+        guildId: interaction.guild.id,
         username: interaction.user.username,
         balance: {
           cash: 0,
@@ -361,13 +365,13 @@ module.exports = ChatCommand({
       });
       await userProfile.save();
     }
-    // Verificar si el usuario está en cooldown
+
     if (cooldowns.has(discordId)) {
       const lastWorkTime = cooldowns.get(discordId);
       const timeElapsed = Date.now() - lastWorkTime;
 
       if (timeElapsed < cooldownTime) {
-        const timeLeft = (cooldownTime - timeElapsed) / 1000; // Convertir a segundos
+        const timeLeft = (cooldownTime - timeElapsed) / 1000;
         const minutes = Math.floor(timeLeft / 60);
         const seconds = Math.floor(timeLeft % 60);
 
@@ -381,16 +385,14 @@ module.exports = ChatCommand({
         return interaction.reply({ embeds: [embed], ephemeral: false });
       }
     }
-    // Obtener una tarea aleatoria y un usuario aleatorio
+
     const task = job.tasks[Math.floor(Math.random() * job.tasks.length)];
     const randomUser = interaction.guild.members.cache.random().user;
 
-    // Calcular las ganancias con un elemento de aleatoriedad
     const baseEarnings = task.earnings;
     const bonusPercentage = Math.random();
     const totalEarnings = baseEarnings * (1 + bonusPercentage);
 
-    // Verificar si el trabajo falla (5% de probabilidad)
     const failureChance = Math.random();
     const isFailure = failureChance < 0.05;
 
@@ -398,7 +400,6 @@ module.exports = ChatCommand({
     if (isFailure) {
       description = `❌ ${interaction.user}, tuviste un mal día en el trabajo. No pudiste completar la tarea y no ganaste dinero.`;
     } else {
-      // Actualizar el balance del usuario
       userProfile.balance.cash += totalEarnings;
       userProfile.balance.total =
         userProfile.balance.cash + userProfile.balance.bank;

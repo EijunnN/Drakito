@@ -1,8 +1,6 @@
-// ./src/commands/user/setcollect.js
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
-const { Role } = require("../../../lib/models/schema");
-const { rolePermission } = require("../../utils/allowedChannels");
+const { Role, Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "setcollect",
@@ -31,14 +29,21 @@ module.exports = ChatCommand({
     const role = interaction.options.getRole("role");
     const amount = interaction.options.getInteger("cantidad");
     const interval = interaction.options.getInteger("tiempo");
-    
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const guildId = interaction.guild.id;
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+
+    if (
+      !adminRoles ||
+      !adminRoles.value.some((roleId) =>
+        interaction.member.roles.cache.has(roleId)
+      )
+    ) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
-    // Verificar que el discordRoleId no sea nulo
+
     if (!role.id) {
       return interaction.reply({
         content: "El rol seleccionado no tiene un ID de Discord válido.",
@@ -48,7 +53,7 @@ module.exports = ChatCommand({
 
     try {
       await Role.findOneAndUpdate(
-        { discordRoleId: role.id },
+        { discordRoleId: role.id, guildId: interaction.guild.id },
         { collectAmount: amount, collectInterval: interval },
         { upsert: true, new: true }
       );
@@ -57,10 +62,8 @@ module.exports = ChatCommand({
         content: `El rol <@&${role.id}> ahora recolecta $${amount} cada ${interval} minutos.`,
         ephemeral: false,
       });
-      // Resto del código de respuesta...
     } catch (error) {
       if (error.code === 11000) {
-        // Manejar el error de índice duplicado
         return interaction.reply({
           content: "Ya existe un rol con el mismo ID de Discord.",
           ephemeral: true,

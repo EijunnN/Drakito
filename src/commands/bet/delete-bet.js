@@ -1,11 +1,17 @@
+// delete-bet.js
 const { ChatCommand } = require("../../utils/commands");
-const { Bet, UserBet, UserBetHistory } = require("../../../lib/models/schema");
+const {
+  Bet,
+  UserBet,
+  UserBetHistory,
+  Config,
+} = require("../../../lib/models/schema");
 const { ApplicationCommandOptionType } = require("discord.js");
-const { rolePermission } = require("../../utils/allowedChannels");
 
 module.exports = ChatCommand({
   name: "delete-bet",
-  description: "Elimina una apuesta y devuelve el dinero a los usuarios que hayan apostado en ella.",
+  description:
+    "Elimina una apuesta y devuelve el dinero a los usuarios que hayan apostado en ella.",
   options: [
     {
       name: "id",
@@ -15,18 +21,25 @@ module.exports = ChatCommand({
     },
   ],
   async execute(client, interaction) {
-    // Obtener el ID de la apuesta a eliminar desde la interacción
     const betId = interaction.options.getString("id");
+    const guildId = interaction.guild.id;
 
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+
+    if (
+      !adminRoles ||
+      !adminRoles.value.some((roleId) =>
+        interaction.member.roles.cache.has(roleId)
+      )
+    ) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
+
     try {
-      // Verificar si la apuesta existe
-      const bet = await Bet.findOne({ betId });
+      const bet = await Bet.findOne({ betId, guildId: interaction.guildId });
       if (!bet) {
         return interaction.reply({
           content: "La apuesta especificada no existe.",
@@ -34,21 +47,22 @@ module.exports = ChatCommand({
         });
       }
 
-      // // Verificar si hay usuarios con apuestas pendientes en esta apuesta
-      const pendingBets = await UserBet.find({ codigo : betId, status: "pending" });
+      const pendingBets = await UserBet.find({
+        guildId: interaction.guild.id,
+        codigo: betId,
+        status: "pending",
+      });
 
       if (pendingBets.length > 0) {
-        // Si hay apuestas pendientes, no se puede eliminar la apuesta
         return interaction.reply({
-          content: "No se puede eliminar la apuesta porque hay usuarios con apuestas pendientes.",
+          content:
+            "No se puede eliminar la apuesta porque hay usuarios con apuestas pendientes.",
           ephemeral: true,
         });
       }
 
-      // Eliminar la apuesta
       await bet.deleteOne();
 
-      // Respuesta exitosa
       return interaction.reply({
         content: "La apuesta ha sido eliminada correctamente.",
         ephemeral: true,

@@ -2,22 +2,30 @@
 const { ApplicationCommandOptionType } = require("discord.js");
 const { ChatCommand } = require("../../utils/commands");
 const { actualizarApuestas } = require("../../core/functions/betData");
-const { rolePermission } = require("../../utils/allowedChannels");
+
+const { Config } = require("../../../lib/models/schema");
 
 module.exports = ChatCommand({
   name: "actualizar",
   description: "Actualiza las apuestas disponibles",
   async execute(client, interaction) {
-    if (!rolePermission.includes(interaction.member.roles.highest.id)) {
+    const channelId = interaction.channel.id;
+    const guildId = interaction.guild.id;
+
+    const adminRoles = await Config.findOne({ guildId, key: "adminRoles" });
+    
+    if (!adminRoles || !adminRoles.value.some(roleId => interaction.member.roles.cache.has(roleId))) {
       return interaction.reply({
-        content: "No tienes permiso para usar este comando.",
+        content: "No tienes permisos para utilizar este comando.",
         ephemeral: true,
       });
     }
     await interaction.deferReply();
 
     try {
-      await actualizarApuestas();
+      const guildId = interaction.guild.id;
+      await actualizarApuestas(guildId);
+
       return interaction.editReply({
         content: "¡Las apuestas se han actualizado correctamente!",
         ephemeral: true,
